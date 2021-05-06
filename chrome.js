@@ -94,6 +94,8 @@ function chromeControl(argv) {
  * Commands
  */
 
+
+
 // List all open tabs
 function list() {
     // Iterate all tabs in all windows
@@ -101,14 +103,16 @@ function list() {
     let allTabsTitle = chrome.windows.tabs.title()
     let allTabsUrls = chrome.windows.tabs.url()
 
+    const STRIP_PROTOCOL_AND_WWW_RE = /^https?:\/\/(www\.)?/i
+
     var titleToUrl = {}
     for (var winIdx = 0; winIdx < allTabsTitle.length; winIdx++) {
         for (var tabIdx = 0; tabIdx < allTabsTitle[winIdx].length; tabIdx ++) {
             let title = allTabsTitle[winIdx][tabIdx]
             let url = allTabsUrls[winIdx][tabIdx]
 
-            titleToUrl[title] = {
-                'title': title || 'No Title',
+            let item = titleToUrl[title] = {
+                'title': (title || 'No Title'),
                 'url': url,
                 'winIdx': winIdx,
                 'tabIdx': tabIdx,
@@ -116,7 +120,12 @@ function list() {
                 // Alfred specific properties
                 'arg': `${winIdx},${tabIdx}`,
                 'subtitle': url,
+                'match': title + " " + url.replace(STRIP_PROTOCOL_AND_WWW_RE, ""),
             }
+           
+            let iconPath = tabIconManager(url);
+            if (iconPath)
+                item["icon"] = {"path": iconPath}
         }
     }
 
@@ -297,3 +306,51 @@ function parseWinTabIdx(arg) {
 
     return { winIdx, tabIdx }
 }
+
+const tabIconManager = (function() {
+    let shell = null;
+    let finderApp = null;
+
+    const ICON_BASE_PATH = $.getenv("HOME") + "/.chrome-control-tab-icons/";
+    const STRIP_PROTOCOL_AND_WWW_RE = /^https?:\/\/(www\.)?/i;
+    const EXTRACT_PROTOCOL_AND_HOST = /^(https?:\/\/[^\/]+)/gi;
+    const ICON_CACHE = {};
+    
+    const getIcon = function(url) {
+        const protocolAndHostMatch = url.match(EXTRACT_PROTOCOL_AND_HOST)
+        if (! protocolAndHostMatch)
+            return null
+
+        const protocolAndHost = protocolAndHostMatch[0]
+
+        let iconPath = ICON_CACHE[protocolAndHost]
+
+        if (! iconPath) {
+            const iconFilename = protocolAndHost.replace(STRIP_PROTOCOL_AND_WWW_RE, "") + ".ico"
+            iconPath = ICON_BASE_PATH + iconFilename;
+            //const iconPath = Path(iconPathStr)
+
+            if (finderApp === null) {
+                finderApp = Application("Finder");
+            }
+
+            if (! finderApp.exists(Path(iconPath))) {
+                if (shell === null) {
+                    const app = Application.currentApplication()
+                    app.includeStandardAdditions = true
+                    shell = app.doShellScript
+                    
+                    shell(`mkdir -p ${ICON_BASE_PATH}`);
+                }
+
+                shell(`curl -f -L ${protocolAndHost}/favicon.ico -o ${iconPath} || cp ${ICON_BASE_PATH}/default.ico ${iconPath}`)
+            }
+
+            ICON_CACHE[protocolAndHost] = iconPath;
+        }
+
+        return iconPath;
+    };
+
+    return getIcon;
+})();
