@@ -314,7 +314,7 @@ const tabIconManager = (function() {
     const ICON_BASE_PATH = $.getenv("HOME") + "/.chrome-control-tab-icons/";
     const STRIP_PROTOCOL_AND_WWW_RE = /^https?:\/\/(www\.)?/i;
     const EXTRACT_PROTOCOL_AND_HOST = /^(https?:\/\/[^\/]+)/gi;
-    const ICON_CACHE = {};
+    const ICON_CACHE = new Map();
     
     const getIcon = function(url) {
         const protocolAndHostMatch = url.match(EXTRACT_PROTOCOL_AND_HOST)
@@ -323,7 +323,7 @@ const tabIconManager = (function() {
 
         const protocolAndHost = protocolAndHostMatch[0]
 
-        let iconPath = ICON_CACHE[protocolAndHost]
+        let iconPath = ICON_CACHE.get(protocolAndHost)
 
         if (! iconPath) {
             const iconFilename = protocolAndHost.replace(STRIP_PROTOCOL_AND_WWW_RE, "") + ".ico"
@@ -343,10 +343,10 @@ const tabIconManager = (function() {
                     shell(`mkdir -p ${ICON_BASE_PATH}`);
                 }
 
-                shell(`curl -f -L ${protocolAndHost}/favicon.ico -o ${iconPath} || cp ${ICON_BASE_PATH}/default.ico ${iconPath}`)
+                shell(`{curl -f -L ${protocolAndHost}/favicon.ico -o ${iconPath} || cp ${ICON_BASE_PATH}/default.ico ${iconPath}} &`)
             }
 
-            ICON_CACHE[protocolAndHost] = iconPath;
+            ICON_CACHE.set(protocolAndHost, iconPath);
         }
 
         return iconPath;
